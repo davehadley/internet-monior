@@ -6,6 +6,9 @@ import re
 from time import sleep
 import csv
 
+import numpy as np
+import matplotlib.pyplot as plt
+
 PingResult = namedtuple("PingResult", ["success", "time", "server"])
 
 def ping(server, timeout=10):
@@ -48,26 +51,32 @@ def plot(db):
     server = None
     with open(db) as data:
         for d, s, r, t in csv.reader(data):
-            d = datetime.strptime(d, "%Y-%m-%d_%H:%M:%S")
+            d = datetime.datetime.strptime(d, "%Y-%m-%d_%H:%M:%S")
+            D.append(d)
             t = float(t)
+            T.append(t)
             r = float(r)
-            r.append(R)
+            R.append(r)
             if server is None:
                 server = s
-            T.append(t)
     # convert data to numpy arrays
     D = np.array(D)
     T = np.array(T)
     R = np.array(R)
-    fig = plt.figure()
-    ax = fig.add_subplot(211)
+    fig = plt.figure(figsize=(20, 10))
+    ax = fig.add_subplot(121)
     ax.plot(D, T, label="Ping Time (timeout=10000ms)")
-    ax = fig.add_subplot(212)
+    ax = fig.add_subplot(122)
     intervals = D[1:] - D[:-1]
-    uptime = sum(intervals[R[:-1]==1])
-    downtime = sum(intervals[R[:-1]==0])
-    ax.pie([uptime, downtime], labels=["uptime", "downtime"])
-    fig.tight_layout()
+    intervals = np.array([itv.total_seconds() for itv in intervals])
+    # remove very long intervals (longer than 2 minutes) as these are probably due to starting and stopping the script
+    selection = intervals < 120
+    uptime = sum(intervals[np.logical_and(R[:-1]==1, selection)])
+    downtime = sum(intervals[np.logical_and(R[:-1]==0, selection)])
+    ax.pie([uptime, downtime], labels=["uptime", "downtime"],
+           wedgeprops=dict(width=0.3, edgecolor='w'),
+    )
+    #fig.tight_layout()
     plt.show()
     return
 
@@ -76,7 +85,7 @@ def parsecml():
     parser.add_argument("-p", "--plot", help="Make plots", action="store_true")
     parser.add_argument("-r", "--run", help="Periodically run test and write results to database.", action="store_true")
     parser.add_argument("-d", "--db", help="Name of input/output database file.", default="internetmonitor.db")
-    parser.add_argument("-i", "--interval", help="Interval between tests in seconds.", default=10, )
+    parser.add_argument("-i", "--interval", help="Interval between tests in seconds.", default=1, )
     parser.add_argument("-s", "--server", help="Server to ping.", default="8.8.8.8", )
     return parser.parse_args()
 

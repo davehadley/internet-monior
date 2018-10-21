@@ -51,7 +51,7 @@ def parsecml():
     parser = ArgumentParser()
     parser.add_argument("-i", "--interval", help="Interval in seconds.", default=10, )
     parser.add_argument("-s", "--server", help="Server to ping.", default="www.google.com", )
-    parser.add_argument("-o", "--output", help="Output log file.", default="~/Google_Drive/home/pinglog_6meadowcroft_sse.csv")
+    parser.add_argument("-o", "--output", help="Output log file.", default="~/Google_Drive/home/pinglog.csv")
     args = parser.parse_args()
     args.output = os.path.expanduser(os.path.expandvars(args.output))
     return args
