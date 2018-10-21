@@ -3,15 +3,18 @@ from collections import namedtuple
 import datetime
 import subprocess
 import re
-from time import sleep
+import time
 import csv
+import requests
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 
 PingResult = namedtuple("PingResult", ["success", "time", "server"])
+CurlResult = namedtuple("CurlResult", ["success", "time", "server"])
 
-def ping(server, timeout=10):
+def ping(server, timeout=60):
     cmd = ["ping", "-c", "1", "-W", str(timeout), "-i", str(timeout), server]
     success = True
     time = float(timeout)*1000.0
@@ -28,10 +31,32 @@ def ping(server, timeout=10):
         raise e
     return PingResult(success, time, server)
 
+def curl(url, timeout=60):
+    start = time.time()
+    success = True
+    try:
+        ret = requests.get(url, timeout=timeout)
+    except (requests.exceptions.Timeout, requests.exceptions.HTTPError):
+        success = False
+    stop = time.time()
+    return CurlResult(success,
+                      (stop - start)*1000.0,
+                      url)
+
+
 def run(server, interval, output):
+    httpmode = "http:/" in server
+    if interval is None:
+        if httpmode:
+            interval = 60
+        else:
+            interval = 10
     while True:
         date = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-        result = ping(server)
+        if httpmode:
+            result = curl(server, timeout=60)
+        else:
+            result = ping(server, timeout=60)
         line = ",".join((
             date,
             result.server,
@@ -41,7 +66,8 @@ def run(server, interval, output):
         with open(output, "a") as f:
             f.write(line)
             f.write("\n")
-        sleep(interval)
+        time.sleep(interval)
+    return
 
 def plot(db):
     # load data
@@ -65,7 +91,12 @@ def plot(db):
     R = np.array(R)
     fig = plt.figure(figsize=(20, 10))
     ax = fig.add_subplot(121)
-    ax.plot(D, T, label="Ping Time (timeout=10000ms)")
+    ax.plot(D, T, label="Response Time (timeout=10000ms)")
+    ax.xaxis.set_tick_params(rotation=45)
+    ax.set_ylabel("Response time [ms]")
+    ax.set_xlabel("Time")
+    ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%d-%b %H:%M"))
+    ax.xaxis.set_minor_formatter(matplotlib.dates.DateFormatter("%H:%M"))
     ax = fig.add_subplot(122)
     intervals = D[1:] - D[:-1]
     intervals = np.array([itv.total_seconds() for itv in intervals])
@@ -76,7 +107,7 @@ def plot(db):
     ax.pie([uptime, downtime], labels=["uptime", "downtime"],
            wedgeprops=dict(width=0.3, edgecolor='w'),
     )
-    #fig.tight_layout()
+    fig.tight_layout()
     plt.show()
     return
 
@@ -84,9 +115,9 @@ def parsecml():
     parser = ArgumentParser()
     parser.add_argument("-p", "--plot", help="Make plots", action="store_true")
     parser.add_argument("-r", "--run", help="Periodically run test and write results to database.", action="store_true")
-    parser.add_argument("-d", "--db", help="Name of input/output database file.", default="internetmonitor.db")
-    parser.add_argument("-i", "--interval", help="Interval between tests in seconds.", default=1, )
-    parser.add_argument("-s", "--server", help="Server to ping.", default="8.8.8.8", )
+    parser.add_argument("-d", "--db", help="Name of input/output database file.", default="internetmonitor.db", type=str)
+    parser.add_argument("-i", "--interval", help="Interval between tests in seconds.", default=1, type=None)
+    parser.add_argument("-s", "--server", help="Server to ping.", default="8.8.8.8", type=str)
     return parser.parse_args()
 
 def main():
@@ -95,8 +126,6 @@ def main():
         run(args.server, args.interval, args.db)
     elif args.plot:
         plot(args.db)
-    else:
-        pint(args.server, args.interval)
     return
 
 if __name__ == "__main__":
