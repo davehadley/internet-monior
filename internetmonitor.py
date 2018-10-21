@@ -118,15 +118,25 @@ def plot(db, outname=None):
     D = []
     T = []
     R = []
+    DOWN = []
+    UP = []
     server = None
     with open(db) as data:
-        for d, s, r, t in csv.reader(data):
+        for row in csv.reader(data):
+            try:
+                d, s, r, t = row
+                down = -1.0
+                up = -1.0
+            except:
+                d, s, r, t, down, up, _ = row
             d = datetime.datetime.strptime(d, "%Y-%m-%d_%H:%M:%S")
             D.append(d)
             t = float(t)
             T.append(t)
             r = float(r)
             R.append(r)
+            DOWN.append(down)
+            UP.append(up)
             if server is None:
                 server = s
     # convert data to numpy arrays
@@ -134,13 +144,25 @@ def plot(db, outname=None):
     T = np.array(T)
     R = np.array(R)
     fig = plt.figure(figsize=(20, 10))
+    # plot ping
     ax = fig.add_subplot(121)
-    ax.plot(D, T, label="Response Time (timeout=10000ms)")
+    ax.plot(D, T, label="Response Time", color="black")
     ax.xaxis.set_tick_params(rotation=45)
     ax.set_ylabel("Response time [ms]")
     ax.set_xlabel("Time")
     ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%d-%b %H:%M"))
-    ax.xaxis.set_minor_formatter(matplotlib.dates.DateFormatter("%H:%M"))
+    ax.xaxis.set_minor_formatter(matplotlib.dates.DateFormatter("%d-%b %%H:%M"))
+    ax.legend()
+    # plot download speeds
+    if max(DOWN)>=0.0:
+        ax = ax.twinx()
+        ax.plot(D, DOWN, label="Download", color="red")
+        ax.plot(D, UP, label="Upload", color="blue")
+        ax.set_ylabel("Speed [Mbps]")
+        ax.legend()
+        ax.set_xlabel("Time")
+        ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%d-%b %H:%M"))
+        ax.xaxis.set_minor_formatter(matplotlib.dates.DateFormatter("%d-%b %%H:%M"))
     ax = fig.add_subplot(122)
     intervals = D[1:] - D[:-1]
     intervals = np.array([itv.total_seconds() for itv in intervals])
