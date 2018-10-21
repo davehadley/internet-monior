@@ -10,9 +10,14 @@ import requests
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
+try:
+    import speedtest
+except ImportError:
+    pass # this feature is optional
 
 PingResult = namedtuple("PingResult", ["success", "time", "server"])
 CurlResult = namedtuple("CurlResult", ["success", "time", "server"])
+SpeedtestResult = namedtuple("SpeedTestResult", ["success", "time", "server", "download", "upload", "link"])
 
 def ping(server, timeout=60):
     cmd = ["ping", "-c", "1", "-W", str(timeout), "-i", str(timeout), server]
@@ -42,26 +47,66 @@ def curl(url, timeout=60):
                       (stop - start)*1000.0,
                       url)
 
+def runspeedtest(timeout=60):
+    try:
+        s = speedtest.Speedtest(timeout=timeout)
+        s.get_best_server()
+        s.download()
+        s.upload(pre_allocate=False)
+        r = s.results
+        link = r.share()
+        success = True
+        ping = r.ping
+        server = r.server["host"]
+        download = r.download/1.e6
+        upload = r.upload/1.e6
+        #link = r.share
+    except Exception as e:
+        success = False
+        ping = timeout*1000
+        server = "speedtest"
+        download = 0.0
+        upload = 0.0
+        link = ""
+
+    return SpeedtestResult(
+        success,
+        ping,
+        server,
+        download,
+        upload,
+        link,
+    )
 
 def run(server, interval, output):
     httpmode = "http:/" in server
+    speedtestmode = server == "speedtest"
     if interval is None:
         if httpmode:
             interval = 60
+        elif speedtestmode:
+            interval = 60*60
         else:
             interval = 10
     while True:
         date = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
         if httpmode:
             result = curl(server, timeout=60)
+        elif speedtestmode:
+            result = runspeedtest(timeout=60)
         else:
             result = ping(server, timeout=60)
+        #print result
         line = ",".join((
             date,
             result.server,
             str(int(result.success)),
             "%.0f" % result.time,
         ))
+        if speedtestmode:
+            line = ",".join((line, ",".join((
+                "%.3f" % result.download, "%.3f" % result.upload, result.link,))
+            ))
         with open(output, "a") as f:
             f.write(line)
             f.write("\n")
@@ -124,7 +169,11 @@ Run with the command line flag -r (or --run) to take data. This will run until
 the process is killed.
 You can make plots by running the script with the -p flag.
 
+If the server is set to "speedtest" then the a speedtest.net speed test will be
+run (this requires speedtest-cli installed).
+
 Requires python packages: requests (>=2.20.0), matplotlib (>=2.2.3), numpy (>=1.15.0).
+Optional packages: speedtest-cli (>=2.0.2).
 
 """
     parser = ArgumentParser(description=description)
