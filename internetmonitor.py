@@ -20,7 +20,6 @@ def ping(server, timeout=60):
     time = float(timeout)*1000.0
     try:
         output = subprocess.check_output(cmd)
-        print output
         match = re.search(".*time=(.*) ms", output)
         if match:
             time = float(match.group(1))
@@ -100,8 +99,8 @@ def plot(db):
     ax = fig.add_subplot(122)
     intervals = D[1:] - D[:-1]
     intervals = np.array([itv.total_seconds() for itv in intervals])
-    # remove very long intervals (longer than 2 minutes) as these are probably due to starting and stopping the script
-    selection = intervals < 120
+    # remove very long intervals (longer than 10 minutes) as these are probably due to starting and stopping the script
+    selection = intervals < (60*10)
     uptime = sum(intervals[np.logical_and(R[:-1]==1, selection)])
     downtime = sum(intervals[np.logical_and(R[:-1]==0, selection)])
     ax.pie([uptime, downtime], labels=["uptime", "downtime"],
@@ -112,20 +111,41 @@ def plot(db):
     return
 
 def parsecml():
-    parser = ArgumentParser()
+    description = """Script to monitor performance of a residential internet connection.
+
+Either requests a URL if the provided server matches http://url/ or pings the server.
+Note that some ISPs may shape/block ICMP pings so the HTTP method is likely to produce more
+robost results (provided you point it at a website that is guaranteed to be up
+(http://www.google.com is a good choice).
+Run with the command line flag -r (or --run) to take data. This will run until
+the process is killed.
+You can make plots by running the script with the -p flag.
+
+Requires python packages: requests (>=2.20.0), matplotlib (>=2.2.3), numpy (>=1.15.0).
+
+"""
+    parser = ArgumentParser(description=description)
     parser.add_argument("-p", "--plot", help="Make plots", action="store_true")
     parser.add_argument("-r", "--run", help="Periodically run test and write results to database.", action="store_true")
-    parser.add_argument("-d", "--db", help="Name of input/output database file.", default="internetmonitor.db", type=str)
-    parser.add_argument("-i", "--interval", help="Interval between tests in seconds.", default=1, type=None)
+    parser.add_argument("-d", "--db", help="Name of input/output database file.", default=None, type=str)
+    parser.add_argument("-i", "--interval", help="Interval between tests in seconds (default is 60s for http and 10 for pings.", default=None, type=int)
     parser.add_argument("-s", "--server", help="Server to ping.", default="8.8.8.8", type=str)
     return parser.parse_args()
 
 def main():
     args = parsecml()
+    if args.db is None:
+        # automatically determine file name
+        args.db = "data_internetmonitor_%s.csv" % (args.server.replace("\\", "_")
+                                                   .replace(":", "_")
+                                                   .replace("/", "_")
+        )
     if args.run:
         run(args.server, args.interval, args.db)
     elif args.plot:
         plot(args.db)
+    else:
+        print "Nothing to do. You must run with either -r or -p flag."
     return
 
 if __name__ == "__main__":
