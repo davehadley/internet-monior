@@ -68,7 +68,7 @@ def run(server, interval, output):
         time.sleep(interval)
     return
 
-def plot(db):
+def plot(db, outname=None):
     # load data
     D = []
     T = []
@@ -107,7 +107,10 @@ def plot(db):
            wedgeprops=dict(width=0.3, edgecolor='w'),
     )
     fig.tight_layout()
-    plt.show()
+    if outname is None:
+        plt.show()
+    else:
+        fig.savefig(outname)
     return
 
 def parsecml():
@@ -126,9 +129,10 @@ Requires python packages: requests (>=2.20.0), matplotlib (>=2.2.3), numpy (>=1.
 """
     parser = ArgumentParser(description=description)
     parser.add_argument("-p", "--plot", help="Make plots", action="store_true")
+    parser.add_argument("-f", "--fig-name", help="Save plot to file name. If not set plots will be displayed on screen.", default=None, type=str)
     parser.add_argument("-r", "--run", help="Periodically run test and write results to database.", action="store_true")
     parser.add_argument("-d", "--db", help="Name of input/output database file.", default=None, type=str)
-    parser.add_argument("-i", "--interval", help="Interval between tests in seconds (default is 60s for http and 10 for pings.", default=None, type=int)
+    parser.add_argument("-i", "--interval", help="Interval between tests in seconds (default is 60s for http and 10s for pings.", default=None, type=int)
     parser.add_argument("-s", "--server", help="Server to ping.", default="8.8.8.8", type=str)
     return parser.parse_args()
 
@@ -143,7 +147,7 @@ def main():
     if args.run:
         run(args.server, args.interval, args.db)
     elif args.plot:
-        plot(args.db)
+        plot(args.db, args.fig_name)
     else:
         print "Nothing to do. You must run with either -r or -p flag."
     return
